@@ -1,0 +1,12 @@
+# Standard: c++20 # Я не могу ничего найти про эту опцию в интернете
+ColumnLimit: 120
+IndentWidth: 4
+PointerAlignment: Left
+AlignAfterOpenBracket: BlockIndent
+BinPackParameters: false
+BinPackArguments: false
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortEnumsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Empty
+AlwaysBreakTemplateDeclarations: Yes
