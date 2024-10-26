@@ -44,10 +44,10 @@ struct Token {
 struct Lexer {
 private:
     StringView expression{};
-    size_t pos{};
+    size_t pos = 0;
 
 public:
-    explicit Lexer(StringView _expression) : expression{_expression}, pos{0} {}
+    explicit Lexer(StringView _expression) : expression{_expression} {}
 
     bool next(Token& token) {
         if (this->pos == this->expression.size()) {
@@ -93,22 +93,23 @@ private:
 };
 
 int main() {
-    char32_t rune{};
-    const char* str = "а中🌞";
+    std::string input{"hа中🌞"};
+    // std::cin >> input;
 
-    const char* begin = str;
-    const char* end = begin + std::strlen(str);
-    ptrdiff_t read = utf8::next_rune(begin, end, rune);
-    while (read != 0) {
-        if (read != utf8::ERR_EOF) {
-            std::cout << static_cast<int32_t>(rune) << " ";
-        } else {
-            std::cout << "xxx\n";
-            return 0;
+    auto cursor = input.cbegin();
+    while (true) {
+        char32_t ch{};
+        auto result = utf8::next_char(cursor, input.cend());
+        if (!result.has_value()) {
+            if (result.error() == utf8::DecodingError::InvalidCharacter) {
+                std::cout << "decoding error\n";
+            }
+            break;
         }
-        begin += read;
-        read = utf8::next_rune(begin, end, rune);
+        ch = *result;
+
+        std::cout << static_cast<int32_t>(ch) << "\n";
     }
-    std::cout << "\n";
+
     return 0;
 }

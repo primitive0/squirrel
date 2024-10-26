@@ -1,82 +1,123 @@
-#include <cstddef>
+#include <array>
 #include <cstdint>
+#include <expected>
+#include <iterator>
+
+template<typename R, typename E>
+using Expected = std::expected<R, E>;
 
 namespace utf8 {
 
-inline constinit ptrdiff_t ERR_EOF = 0;
-inline constinit ptrdiff_t ERR_INVALID_UTF8 = -1;
+template<typename It>
+concept OctetIterator = std::forward_iterator<It> && std::same_as<std::iter_value_t<It>, char>;
 
-inline ptrdiff_t next_rune(const char* begin, const char* end, char32_t& rune) {
-    if ((*begin & 0b10000000) == 0b00000000) { // 0xxxxxxx
-        if (begin >= end) {
-            return ERR_EOF;
+enum struct DecodingError {
+    Eof,
+    InvalidCharacter,
+};
+
+// todo: better name
+template<OctetIterator It>
+inline Expected<void, DecodingError> read_utf8_octet(It& it, It end, uint8_t& octet) {
+    if (it == end) {
+        return std::unexpected(DecodingError::Eof);
+    }
+
+    octet = *it;
+    it = std::next(it);
+
+    if ((octet & 0xC0) != 0x80) {
+        return std::unexpected(DecodingError::InvalidCharacter);
+    }
+
+    return {};
+}
+
+template<OctetIterator It>
+inline Expected<char32_t, DecodingError> next_char(It& it, It end) {
+    if (it == end) {
+        return std::unexpected(DecodingError::Eof);
+    }
+
+    It current = it;
+    std::array<uint8_t, 4> octets{};
+
+    octets[0] = *current;
+    current = std::next(current);
+
+    if ((octets[0] & 0x80) == 0) {
+        it = current;
+        return static_cast<char32_t>(octets[0]);
+    } else if ((octets[0] & 0xE0) == 0xC0) {
+        auto result = read_utf8_octet(current, end, octets[1]);
+        if (!result) {
+            return std::unexpected(result.error());
         }
 
-        rune = *begin;
+        char32_t ch{};
+        ch = octets[1] & 0x3F;
+        ch |= (octets[0] & 0x1F) << 6;
 
-        return 1;
-    } else if ((*begin & 0b11100000) == 0b11000000) { // 110xxxxx
-        if (begin + 1 >= end) {
-            return ERR_EOF;
-        }
-        int32_t first = begin[0];
-        int32_t second = begin[1];
-
-        if ((second & 0b11000000) != 0b10000000) {
-            return ERR_INVALID_UTF8;
+        if (ch < 0x80) {
+            return std::unexpected(DecodingError::InvalidCharacter);
         }
 
-        rune = second & 0b00111111;
-        rune |= (first & 0b00011111) << 6;
-
-        return 2;
-    } else if ((*begin & 0b11110000) == 0b11100000) { // 1110xxxx
-        if (begin + 2 >= end) {
-            return ERR_EOF;
+        it = current;
+        return ch;
+    } else if ((octets[0] & 0xF0) == 0xE0) {
+        auto result = read_utf8_octet(current, end, octets[1]);
+        if (!result) {
+            return std::unexpected(result.error());
         }
-        int32_t first = begin[0];
-        int32_t second = begin[1];
-        int32_t third = begin[2];
-
-        if ((second & 0b11000000) != 0b10000000) {
-            return ERR_INVALID_UTF8;
-        }
-        if ((third & 0b11000000) != 0b10000000) {
-            return ERR_INVALID_UTF8;
+        result = read_utf8_octet(current, end, octets[2]);
+        if (!result) {
+            return std::unexpected(result.error());
         }
 
-        rune = third & 0b00111111;
-        rune |= (second & 0b00111111) << 6;
-        rune |= (first & 0b00001111) << 12;
+        char32_t ch{};
+        ch = octets[2] & 0x3F;
+        ch |= (octets[1] & 0x3F) << 6;
+        ch |= (octets[0] & 0x0F) << 12;
 
-        return 3;
-    } else if ((*begin & 0b11111000) == 0b11110000) { // 11110xxx
-        if (begin + 3 >= end) {
-            return ERR_EOF;
-        }
-        int32_t first = begin[0];
-        int32_t second = begin[1];
-        int32_t third = begin[2];
-        int32_t forth = begin[3];
-
-        if ((second & 0b11000000) != 0b10000000) {
-            return ERR_INVALID_UTF8;
-        }
-        if ((third & 0b11000000) != 0b10000000) {
-            return ERR_INVALID_UTF8;
-        }
-        if ((forth & 0b11000000) != 0b10000000) {
-            return ERR_INVALID_UTF8;
+        if (ch < 0x800) {
+            return std::unexpected(DecodingError::InvalidCharacter);
         }
 
-        rune = forth & 0b00111111;
-        rune |= (third & 0b00111111) << 6;
-        rune |= (second & 0b00111111) << 12;
-        rune |= (first & 0b00000111) << 18;
+        it = current;
+        return ch;
+    } else if ((octets[0] & 0xF8) == 0xF0) {
+        auto result = read_utf8_octet(current, end, octets[1]);
+        if (!result) {
+            return std::unexpected(result.error());
+        }
+        result = read_utf8_octet(current, end, octets[2]);
+        if (!result) {
+            return std::unexpected(result.error());
+        }
+        result = read_utf8_octet(current, end, octets[3]);
+        if (!result) {
+            return std::unexpected(result.error());
+        }
 
-        return 4;
+        char32_t ch{};
+        ch = octets[3] & 0x3F;
+        ch |= (octets[2] & 0x3F) << 6;
+        ch |= (octets[1] & 0x3F) << 12;
+        ch |= (octets[0] & 0x07) << 18;
+
+        if (ch < 0x10000) {
+            return std::unexpected(DecodingError::InvalidCharacter);
+        }
+
+        // invalid UTF-8 characters
+        if (ch > 0x10FFFF) {
+            return std::unexpected(DecodingError::InvalidCharacter);
+        }
+
+        it = current;
+        return ch;
     } else {
-        return ERR_INVALID_UTF8;
+        return std::unexpected(DecodingError::InvalidCharacter);
     }
 }
 
