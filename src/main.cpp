@@ -2,12 +2,9 @@
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <string_view>
 
+#include "types/string.hpp"
 #include "utf8.hpp"
-
-using String = std::string;
-using StringView = std::string_view;
 
 enum class TokenKind : uint32_t {
     Ident,
@@ -93,8 +90,8 @@ private:
 };
 
 int main() {
-    std::string input{"hа中🌞"};
-    // std::cin >> input;
+    std::string input{};
+    std::getline(std::cin, input);
 
     auto cursor = input.cbegin();
     while (true) {
