@@ -133,6 +133,10 @@ inline auto is_letter(char32_t ch) -> bool {
     return is_lowercase(ch) || is_uppercase(ch);
 }
 
+inline auto is_digit(char32_t ch) -> bool {
+    return ch >= U'0' && ch <= U'9';
+}
+
 } // namespace ascii
 
 } // namespace utf8
